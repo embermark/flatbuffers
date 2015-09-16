@@ -68,6 +68,10 @@ const Generator generators[] = {
     flatbuffers::GeneratorOptions::kMAX,
     "Generate Python files for tables/structs",
     flatbuffers::GeneralMakeRule },
+  { flatbuffers::GenerateUE4,   "-u", "Unreal Engine 4",
+    flatbuffers::GeneratorOptions::kMAX,
+    "Generate Unreal Engine 4 (Blueprint) files for tables/structs",
+    flatbuffers::UE4MakeRule },
 };
 
 const char *program_name = NULL;

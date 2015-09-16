@@ -35,6 +35,7 @@ set(FlatBuffers_Compiler_SRCS
   src/idl_gen_go.cpp
   src/idl_gen_python.cpp
   src/idl_gen_fbs.cpp
+  src/idl_gen_ue4.cpp
   src/flatc.cpp
 )
 

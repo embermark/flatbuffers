@@ -506,6 +506,13 @@ extern bool GenerateCSharp(const Parser &parser,
                            const std::string &file_name,
                            const GeneratorOptions &opts);
 
+// Generate a UE4 header from the definitions in the Parser object.
+// See idl_gen_ue4.
+extern bool GenerateUE4(const Parser &parser,
+                        const std::string &path,
+                        const std::string &file_name,
+                        const GeneratorOptions &opts);
+
 // Generate Java/C#/.. files from the definitions in the Parser object.
 // See idl_gen_general.cpp.
 extern bool GenerateGeneral(const Parser &parser,
@@ -526,6 +533,13 @@ extern bool GenerateFBS(const Parser &parser,
 // Generate a make rule for the generated C++ header.
 // See idl_gen_cpp.cpp.
 extern std::string CPPMakeRule(const Parser &parser,
+                               const std::string &path,
+                               const std::string &file_name,
+                               const GeneratorOptions &opts);
+
+// Generate a make rule for the generated C++ header.
+// See idl_gen_cpp.cpp.
+extern std::string UE4MakeRule(const Parser &parser,
                                const std::string &path,
                                const std::string &file_name,
                                const GeneratorOptions &opts);

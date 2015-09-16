@@ -2,24 +2,31 @@
 
 namespace MyGame.Sample;
 
-enum Color:byte { Red = 0, Green, Blue = 2 }
+attribute "blueprint";
+
+enum Color:byte (blueprint) { Red = 0, Green, Blue = 2 }
 
 union Any { Monster }  // add more elements..
 
-struct Vec3 {
+struct Vec2 (blueprint) {
   x:float;
   y:float;
+}
+
+struct Vec3 {
+  xy:Vec2;
   z:float;
 }
 
-table Monster {
+table Monster (blueprint) {
   pos:Vec3;
-  mana:short = 150;
-  hp:short = 100;
+  mana:int = 150;
+  hp:int = 100;
   name:string;
-  friendly:bool = false (deprecated);
   inventory:[ubyte];
+  friends:[Monster];
   color:Color = Blue;
+  super_damage:int = 0;
 }
 
 root_type Monster;
