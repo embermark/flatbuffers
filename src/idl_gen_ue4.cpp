@@ -242,9 +242,9 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   GenComment(struct_def.doc_comment, code_ptr, nullptr);
   auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
-  code += "USTRUCT()\n";
-  code += "struct " + ue4_class + " {\n";
-  code += "  GENERATED_USTRUCT_BODY()\n";
+  code += "UCLASS()\n";
+  code += "struct " + ue4_class + " : public UObject {\n";
+  code += "  GENERATED_BODY()\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
@@ -286,9 +286,9 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
   GenComment(struct_def.doc_comment, code_ptr, nullptr);
   auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
-  code += "USTRUCT()\n";
-  code += "struct " + ue4_class + " {\n";
-  code += "  GENERATED_USTRUCT_BODY()\n\n";
+  code += "UCLASS()\n";
+  code += "struct " + ue4_class + " : public UObject {\n";
+  code += "  GENERATED_BODY()\n\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
