@@ -73,10 +73,10 @@ static std::string GenTypeWire(const Parser &parser, const Type &type,
 static std::string GenTypePointer(const Parser &parser, const Type &type) {
   switch (type.base_type) {
     case BASE_TYPE_STRING:
-      return "const FString &";
+      return "FString";
     case BASE_TYPE_VECTOR:
-      return "const TArray<" +
-             GenTypeWire(parser, type.VectorType(), "", false) + "> &";
+      return "TArray<" +
+             GenTypeWire(parser, type.VectorType(), "", false) + ">";
     case BASE_TYPE_STRUCT: {
       return UE4ClassName(*type.struct_def) + " *";
     }
@@ -111,7 +111,7 @@ static void GenEnum(const Parser &/*parser*/, EnumDef &enum_def,
   std::string &code = *code_ptr;
   GenComment(enum_def.doc_comment, code_ptr, nullptr);
   code += "UENUM(BlueprintType)\n";
-  code += "enum class E" + enum_def.name + " {\n";
+  code += "enum class E" + enum_def.name + " : uint8 {\n";
   for (auto it = enum_def.vals.vec.begin();
        it != enum_def.vals.vec.end();
        ++it) {
@@ -135,8 +135,7 @@ std::string GenUnderlyingCast(const Parser &parser, const FieldDef &field,
         val + ")"
       : val;
 }
-#if 0
-static void GenConstructors(StructDef &struct_def, std::string *code_ptr) {
+static void GenConstructors(const Parser &parser, StructDef &struct_def, std::string *code_ptr) {
   std::string &code = *code_ptr;
   std::string ue4_class = UE4ClassName(struct_def);
   std::string cpp_class = CPPClassName(struct_def);
@@ -144,8 +143,8 @@ static void GenConstructors(StructDef &struct_def, std::string *code_ptr) {
   // static Create method should be used instead of constructor since UE4 requires constructor
   // have no parameters
   code += "  static " + ue4_class + " *Create(const " + cpp_class + " *flatbuffer) {\n";
+  code += "    if (!flatbuffer) {\n      return nullptr;\n    }\n";
   code += "    auto o = NewObject<" + ue4_class + ">();\n";
-  code += "    o->flatbuffer_ = flatbuffer;\n";
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
        ++it) {
@@ -153,14 +152,17 @@ static void GenConstructors(StructDef &struct_def, std::string *code_ptr) {
     if (!field.deprecated) {
         switch (field.value.type.base_type) {
           case BASE_TYPE_STRING:
-            code += "    o->" + field.name + "_ = flatbuffer->" + field.name + "()->c_str();\n";
+            code += "    o->" + field.name + " = flatbuffer->" + field.name + "()->c_str();\n";
             break;
           case BASE_TYPE_VECTOR:
+          {
             code += "    for (auto elem : *flatbuffer->" + field.name + "()) {\n";
-            code += "      o->" + field.name + "_.Add(elem);\n    }\n";
+            std::string elem = IsScalar(field.value.type.element) ? "elem" : UE4ClassName(*field.value.type.struct_def) + "::Create(elem)";
+            code += "      o->" + field.name + ".Add(" + elem + ");\n    }\n";
             break;
+        }
           case BASE_TYPE_STRUCT:
-            code += "    o->" + field.name + "_ = " + UE4ClassName(*field.value.type.struct_def);
+            code += "    o->" + field.name + " = " + UE4ClassName(*field.value.type.struct_def);
             code += "::Create(";
             if (struct_def.fixed) {
               code += "&";
@@ -168,6 +170,7 @@ static void GenConstructors(StructDef &struct_def, std::string *code_ptr) {
             code += "flatbuffer->" + field.name + "());\n";
             break;
           default:
+            code += "    o->" + field.name + " = " + GenUnderlyingCast(parser, field, true, "flatbuffer->" + field.name + "()") + ";\n";
             break;
         }
     }
@@ -176,8 +179,7 @@ static void GenConstructors(StructDef &struct_def, std::string *code_ptr) {
 
   //code += "  const " + cpp_class + " *RawFlatbuffer() const { return flatbuffer_; }\n\n";
 }
-#endif
-
+#if 0
 static void GenDeserialize(StructDef &struct_def, std::string *code_ptr) {
   std::string &code = *code_ptr;
   std::string ue4_class = UE4ClassName(struct_def);
@@ -185,7 +187,8 @@ static void GenDeserialize(StructDef &struct_def, std::string *code_ptr) {
 
   // static Create method should be used instead of constructor since UE4 requires constructor
   // have no parameters
-  code += "  " + ue4_class + " (const " + cpp_class + " &flatbuffer) {\n";
+  code += "  " + ue4_class + " *Create(const " + cpp_class + " *flatbuffer) {\n";
+  code += "    if (!flatbuffer) {\n      return nullptr;\n    }\n"
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
        ++it) {
@@ -230,6 +233,7 @@ static void GenMembers(const Parser &parser, StructDef &struct_def, std::string 
   }
 }
 #endif
+#endif
 
 // Generate an accessor struct, builder structs & function for a table.
 static void GenTable(const Parser &parser, StructDef &struct_def,
@@ -243,13 +247,13 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
   code += "UCLASS()\n";
-  code += "struct " + ue4_class + " : public UObject {\n";
+  code += "class " + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
-  //code += "\n public:\n";
-  GenDeserialize(struct_def, &code);
+  code += "\n public:\n";
+  GenConstructors(parser, struct_def, &code);
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
        ++it) {
@@ -258,7 +262,7 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
       //auto is_scalar = IsScalar(field.value.type.base_type);
       GenComment(field.doc_comment, code_ptr, nullptr, "  ");
       code += "  UPROPERTY()\n";
-      code += "  const " + GenTypeGet(parser, field.value.type, true);
+      code += "  " + GenTypeGet(parser, field.value.type, true);
       code += field.name + ";\n";
 
       // Call a different accessor for pointers, that indirects.
@@ -287,13 +291,13 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
   auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
   code += "UCLASS()\n";
-  code += "struct " + ue4_class + " : public UObject {\n";
+  code += "class " + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
-  //code += "\n public:\n";
-  GenDeserialize(struct_def, &code);
+  code += "\n public:\n";
+  GenConstructors(parser, struct_def, &code);
 
   // Generate accessor methods of the form:
   // type name() const { return flatbuffers::EndianScalar(name_); }
@@ -303,7 +307,7 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
     auto &field = **it;
     GenComment(field.doc_comment, code_ptr, nullptr, "  ");
     code += "  UPROPERTY()\n";
-    code += "  const " + GenTypeGet(parser, field.value.type, true);
+    code += "  " + GenTypeGet(parser, field.value.type, true);
     code += field.name + ";\n";
   }
   code += "};\n\n";
