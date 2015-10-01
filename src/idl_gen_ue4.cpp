@@ -218,36 +218,42 @@ static void GenSerializer(const Parser &parser, StructDef &struct_def, std::stri
 
   // static Create method should be used instead of constructor since UE4 requires constructor
   // have no parameters
-  code += "  flatbuffers::Offset<" + cpp_class + "> ToFlatBuffer(flatbuffers::FlatBufferBuilder &_fbb) {\n";
-  code += "    return " + CPPNamespace(struct_def) + "Create" + struct_def.name + "(_fbb";
+  std::string pre_create;
+  std::string post_create;
+  post_create += "  flatbuffers::Offset<" + cpp_class + "> ToFlatBuffer(flatbuffers::FlatBufferBuilder &_fbb) {\n";
+  post_create += "    return " + CPPNamespace(struct_def) + "Create" + struct_def.name + "(_fbb";
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
        ++it) {
     auto &field = **it;
     if (!field.deprecated) {
-        code += ",\n      ";
+        post_create += ",\n      ";
         if (IsScalar(field.value.type.base_type)) {
-            code += GenUnderlyingCastCpp(parser, field, true, field.name);
+            post_create += GenUnderlyingCastCpp(parser, field, true, field.name);
         } else {
             // Create nested data
             switch (field.value.type.base_type) {
               case BASE_TYPE_STRING:
-                code += "_fbb.CreateString(TCHAR_TO_ANSI(*" + field.name + "))";
+                post_create += "_fbb.CreateString(TCHAR_TO_ANSI(*" + field.name + "))";
                 break;
               case BASE_TYPE_STRUCT:
-                code += "0";//(" + field.name + " ? " + field.name + ".ToFlatBuffer(fbb) : 0)";
+                if (IsStruct(field.value.type))  {
+                    pre_create += "    " + CPPClassName(field.value.type.struct_def) + field.name + "_;\n";
+                    pre_create += "    if (" + field.name + ") {\n      " + field.name + "_ = " + field.name + ".ToFlatBuffer();\n    }\n";
+                }
+                post_create += "0";//(" + field.name + " ? " + field.name + ".ToFlatBuffer(fbb) : 0)";
                 break;
               case BASE_TYPE_VECTOR:
               {
-                code += "0";
+                post_create += "0";
 #if 0
                 GenCreateVector(field.value.type.VectorType())
                 auto scalar = IsScalar(field.value.type.element);
                 vecor_type = GenVectorType(field.value.type.VectorType());
-                code += "    std::vector< " + vector_type + "> " + field.name + "_(" + field.name + ".Length());\n";
-                code += "    for (auto elem : " + field.name + " {\n";
+                post_create += "    std::vector< " + vector_type + "> " + field.name + "_(" + field.name + ".Length());\n";
+                post_create += "    for (auto elem : " + field.name + " {\n";
                 std::string elem =  ? "elem" : UE4ClassName(*field.value.type.struct_def) + "::Create(elem)";
-                code += "      o->" + field.name + ".Add(" + elem + ");\n    }\n";
+                post_create += "      o->" + field.name + ".Add(" + elem + ");\n    }\n";
 #endif
                 break;
               }
@@ -257,7 +263,8 @@ static void GenSerializer(const Parser &parser, StructDef &struct_def, std::stri
         }
     }
   }
-  code += ");\n  }\n\n";
+  post_create += ");\n  }\n\n";
+  code += pre_create + post_create;
 }
 
 #if 0
