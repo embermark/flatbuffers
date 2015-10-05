@@ -467,8 +467,7 @@ std::string GenerateUE4(const Parser &parser,
         auto basename = flatbuffers::StripPath(
                           flatbuffers::StripExtension(it->first));
         if (basename != file_name) {
-          // TODO: include other ue4 objects since they may reference eachother
-          code += "#include \"" + basename + "_generated.h\"\n";
+          code += "#include \"" + basename + "_ue4_generated.h\"\n";
           num_includes++;
         }
       }
