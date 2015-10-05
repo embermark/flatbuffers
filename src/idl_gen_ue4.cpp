@@ -220,7 +220,7 @@ static void GenSerializer(const Parser &parser, StructDef &struct_def, std::stri
   // have no parameters
   std::string pre_create;
   std::string post_create;
-  post_create += "  flatbuffers::Offset<" + cpp_class + "> ToFlatBuffer(flatbuffers::FlatBufferBuilder &_fbb) {\n";
+  pre_create += "  flatbuffers::Offset<" + cpp_class + "> ToFlatBuffer(flatbuffers::FlatBufferBuilder &_fbb) {\n";
   post_create += "    return " + CPPNamespace(struct_def) + "Create" + struct_def.name + "(_fbb";
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
@@ -238,10 +238,13 @@ static void GenSerializer(const Parser &parser, StructDef &struct_def, std::stri
                 break;
               case BASE_TYPE_STRUCT:
                 if (IsStruct(field.value.type))  {
-                    pre_create += "    " + CPPClassName(field.value.type.struct_def) + field.name + "_;\n";
-                    pre_create += "    if (" + field.name + ") {\n      " + field.name + "_ = " + field.name + ".ToFlatBuffer();\n    }\n";
+                    post_create += UE4ClassName(*field.value.type.struct_def) + "::ToFlatBufferStruct(" + field.name + ").get()";
+                    //pre_create += "    " + CPPClassName(*field.value.type.struct_def) + " " + field.name + "_;\n";
+                    //pre_create += "    if (" + field.name + ") {\n      " + field.name + "_ = " + field.name + ".ToFlatBuffer();\n    }\n";
+                } else {
+                    post_create += UE4ClassName(*field.value.type.struct_def) + "::ToFlatBuffer(_fbb, " + field.name + ")";
                 }
-                post_create += "0";//(" + field.name + " ? " + field.name + ".ToFlatBuffer(fbb) : 0)";
+
                 break;
               case BASE_TYPE_VECTOR:
               {
@@ -452,6 +455,8 @@ std::string GenerateUE4(const Parser &parser,
     // Generate include guard.
     code += "#pragma once\n";
 
+    // ue4 helpers
+    code += "#include \"flatbuffers_ue4.h\"\n";
     // include flatbuffers cpp implementation
     code += "#include \"" + file_name + "_generated.h\"\n";
 

@@ -25,6 +25,7 @@ table Monster (blueprint) {
   name:string;
   inventory:[ubyte];
   friends:[Monster];
+  frenemy:Monster;
   color:Color = Blue;
   super_damage:int = 0;
 }

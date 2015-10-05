@@ -77,8 +77,9 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const flatbuffers::String *name() const { return GetPointer<const flatbuffers::String *>(10); }
   const flatbuffers::Vector<uint8_t> *inventory() const { return GetPointer<const flatbuffers::Vector<uint8_t> *>(12); }
   const flatbuffers::Vector<flatbuffers::Offset<Monster>> *friends() const { return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<Monster>> *>(14); }
-  Color color() const { return static_cast<Color>(GetField<int8_t>(16, 2)); }
-  int32_t super_damage() const { return GetField<int32_t>(18, 0); }
+  const Monster *frenemy() const { return GetPointer<const Monster *>(16); }
+  Color color() const { return static_cast<Color>(GetField<int8_t>(18, 2)); }
+  int32_t super_damage() const { return GetField<int32_t>(20, 0); }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<Vec3>(verifier, 4 /* pos */) &&
@@ -91,8 +92,10 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            VerifyField<flatbuffers::uoffset_t>(verifier, 14 /* friends */) &&
            verifier.Verify(friends()) &&
            verifier.VerifyVectorOfTables(friends()) &&
-           VerifyField<int8_t>(verifier, 16 /* color */) &&
-           VerifyField<int32_t>(verifier, 18 /* super_damage */) &&
+           VerifyField<flatbuffers::uoffset_t>(verifier, 16 /* frenemy */) &&
+           verifier.VerifyTable(frenemy()) &&
+           VerifyField<int8_t>(verifier, 18 /* color */) &&
+           VerifyField<int32_t>(verifier, 20 /* super_damage */) &&
            verifier.EndTable();
   }
 };
@@ -106,12 +109,13 @@ struct MonsterBuilder {
   void add_name(flatbuffers::Offset<flatbuffers::String> name) { fbb_.AddOffset(10, name); }
   void add_inventory(flatbuffers::Offset<flatbuffers::Vector<uint8_t>> inventory) { fbb_.AddOffset(12, inventory); }
   void add_friends(flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<Monster>>> friends) { fbb_.AddOffset(14, friends); }
-  void add_color(Color color) { fbb_.AddElement<int8_t>(16, static_cast<int8_t>(color), 2); }
-  void add_super_damage(int32_t super_damage) { fbb_.AddElement<int32_t>(18, super_damage, 0); }
+  void add_frenemy(flatbuffers::Offset<Monster> frenemy) { fbb_.AddOffset(16, frenemy); }
+  void add_color(Color color) { fbb_.AddElement<int8_t>(18, static_cast<int8_t>(color), 2); }
+  void add_super_damage(int32_t super_damage) { fbb_.AddElement<int32_t>(20, super_damage, 0); }
   MonsterBuilder(flatbuffers::FlatBufferBuilder &_fbb) : fbb_(_fbb) { start_ = fbb_.StartTable(); }
   MonsterBuilder &operator=(const MonsterBuilder &);
   flatbuffers::Offset<Monster> Finish() {
-    auto o = flatbuffers::Offset<Monster>(fbb_.EndTable(start_, 8));
+    auto o = flatbuffers::Offset<Monster>(fbb_.EndTable(start_, 9));
     return o;
   }
 };
@@ -123,10 +127,12 @@ inline flatbuffers::Offset<Monster> CreateMonster(flatbuffers::FlatBufferBuilder
    flatbuffers::Offset<flatbuffers::String> name = 0,
    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> inventory = 0,
    flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<Monster>>> friends = 0,
+   flatbuffers::Offset<Monster> frenemy = 0,
    Color color = Color_Blue,
    int32_t super_damage = 0) {
   MonsterBuilder builder_(_fbb);
   builder_.add_super_damage(super_damage);
+  builder_.add_frenemy(frenemy);
   builder_.add_friends(friends);
   builder_.add_inventory(inventory);
   builder_.add_name(name);
