@@ -175,7 +175,15 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
           case BASE_TYPE_VECTOR:
           {
             code += "    for (auto elem : *flatbuffer->" + field.name + "()) {\n";
-            std::string elem = IsScalar(field.value.type.element) ? "elem" : UE4ClassName(*field.value.type.struct_def) + "::Create(elem)";
+            std::string elem;
+            if (IsScalar(field.value.type.element)) {
+              elem = "elem";
+            } else if (field.value.type.struct_def) {
+              elem = UE4ClassName(*field.value.type.struct_def) + "::Create(elem)";
+            } else {
+              // String
+              elem = "elem->c_str()";
+            }
             code += "      o->" + field.name + ".Add(" + elem + ");\n    }\n";
             break;
         }
@@ -198,20 +206,31 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
   //code += "  const " + cpp_class + " *RawFlatbuffer() const { return flatbuffer_; }\n\n";
 }
 
-#if 0
-std::string GenTypeVector(Type &type) {
-  if (IsScalar(type.base_type)) {
-    return GenTypeBasic(type.base_type)
-  } else if (type.base_type == STRING) {
-    return "flatbuffers::Offset<flatbuffers::String>";
-  } else if (IsStruct(type)) {
-    return type.struct_def.name;
-  } else {
-    return "flatbuffers::Offset<" + type.struct_def.name + ">";
+static void GenStructSerializer(const Parser &parser, StructDef &struct_def, std::string *code_ptr) {
+  std::string &code = *code_ptr;
+  std::string ue4_class = UE4ClassName(struct_def);
+  std::string cpp_class = CPPClassName(struct_def);
+
+  code += "  std::unique_ptr<" + cpp_class + "> ToFlatBufferStruct() const {\n";
+  code += "    return std::unique_ptr<" + cpp_class + ">(new " + cpp_class + "(\n";
+  for (auto it = struct_def.fields.vec.begin();
+       it != struct_def.fields.vec.end();
+       ++it) {
+    auto &field = **it;
+    code += "      ";
+    if (IsScalar(field.value.type.base_type)) {
+      code += GenUnderlyingCastCpp(parser, field, true, field.name);
+    } else if (IsStruct(field.value.type)) {
+      code += "*" + field.name + "->ToFlatBufferStruct()";
+    } else {
+      assert("can't serialize this guy!!!");
+    }
+    code += (it + 1) != struct_def.fields.vec.end() ? ",\n" : "\n";
   }
+  code += "    ));\n  }\n\n";
 }
-#endif
-static void GenSerializer(const Parser &parser, StructDef &struct_def, std::string *code_ptr) {
+
+static void GenTableSerializer(const Parser &parser, StructDef &struct_def, std::string *code_ptr) {
   std::string &code = *code_ptr;
   std::string ue4_class = UE4ClassName(struct_def);
   std::string cpp_class = CPPClassName(struct_def);
@@ -220,7 +239,7 @@ static void GenSerializer(const Parser &parser, StructDef &struct_def, std::stri
   // have no parameters
   std::string pre_create;
   std::string post_create;
-  pre_create += "  flatbuffers::Offset<" + cpp_class + "> ToFlatBuffer(flatbuffers::FlatBufferBuilder &_fbb) {\n";
+  pre_create += "  flatbuffers::Offset<" + cpp_class + "> ToFlatBuffer(flatbuffers::FlatBufferBuilder &_fbb) const {\n";
   post_create += "    return " + CPPNamespace(struct_def) + "Create" + struct_def.name + "(_fbb";
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
@@ -238,26 +257,20 @@ static void GenSerializer(const Parser &parser, StructDef &struct_def, std::stri
                 break;
               case BASE_TYPE_STRUCT:
                 if (IsStruct(field.value.type))  {
-                    post_create += UE4ClassName(*field.value.type.struct_def) + "::ToFlatBufferStruct(" + field.name + ").get()";
-                    //pre_create += "    " + CPPClassName(*field.value.type.struct_def) + " " + field.name + "_;\n";
-                    //pre_create += "    if (" + field.name + ") {\n      " + field.name + "_ = " + field.name + ".ToFlatBuffer();\n    }\n";
+                    post_create += "(" + field.name + " ? " + field.name + "->ToFlatBufferStruct().get() : nullptr)";
                 } else {
-                    post_create += UE4ClassName(*field.value.type.struct_def) + "::ToFlatBuffer(_fbb, " + field.name + ")";
+                    post_create += "(" + field.name + " ? " + field.name + "->ToFlatBuffer(_fbb) : 0)";
                 }
 
                 break;
               case BASE_TYPE_VECTOR:
               {
-                post_create += "0";
-#if 0
-                GenCreateVector(field.value.type.VectorType())
-                auto scalar = IsScalar(field.value.type.element);
-                vecor_type = GenVectorType(field.value.type.VectorType());
-                post_create += "    std::vector< " + vector_type + "> " + field.name + "_(" + field.name + ".Length());\n";
-                post_create += "    for (auto elem : " + field.name + " {\n";
-                std::string elem =  ? "elem" : UE4ClassName(*field.value.type.struct_def) + "::Create(elem)";
-                post_create += "      o->" + field.name + ".Add(" + elem + ");\n    }\n";
-#endif
+                auto vector_type = field.value.type.VectorType();
+                if (IsScalar(vector_type.base_type)) {
+                  post_create += "flatbuffers::ue4::CreateVector<" + GenTypeBasicCpp(parser, vector_type, true) + ", " + GenTypeBasic(parser, vector_type, true) + ">(_fbb, " + field.name + ")";
+                } else {
+                  post_create += "flatbuffers::ue4::CreateVector(_fbb, " + field.name + ")";
+                }
                 break;
               }
               default:
@@ -340,12 +353,13 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   code += "UCLASS()\n";
   code += "class " + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n";
+  code += "  using flatbuffer_t = " + cpp_class + ";\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
   code += "\n public:\n";
   GenConstructors(parser, struct_def, &code);
-  GenSerializer(parser, struct_def, &code);
+  GenTableSerializer(parser, struct_def, &code);
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
        ++it) {
@@ -385,11 +399,13 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
   code += "UCLASS()\n";
   code += "class " + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n\n";
+  code += "  using flatbuffer_t = " + cpp_class + ";\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
   code += "\n public:\n";
   GenConstructors(parser, struct_def, &code);
+  GenStructSerializer(parser, struct_def, &code);
 
   // Generate accessor methods of the form:
   // type name() const { return flatbuffers::EndianScalar(name_); }

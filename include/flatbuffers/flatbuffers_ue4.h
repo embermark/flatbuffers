@@ -4,7 +4,7 @@ namespace flatbuffers {
 namespace ue4 {
 
 //strings -> Offset<Vector<T = Offset<String>>>
-Offset<Vector<Offset<String>>> CreateVector(flatbuffers::FlatBufferBuilder &_fbb, TArray<FString> arr) {
+Offset<Vector<Offset<String>>> CreateVector(FlatBufferBuilder &_fbb, TArray<FString> arr) {
     std::vector<Offset<String>> v;
     v.reserve(arr.Num());
     for (const FString &s : arr) {
@@ -13,40 +13,51 @@ Offset<Vector<Offset<String>>> CreateVector(flatbuffers::FlatBufferBuilder &_fbb
     return _fbb.CreateVector(v);
 }
 
+// tables -> Offset<Vector<T = Offset<Table>>>
+// U is a UObject with ToFlatbuffer
+template<typename T,
+         typename = typename std::enable_if<
+            std::is_base_of<flatbuffers::Table, typename T::flatbuffer_t>::value>::type>
+Offset<Vector<Offset<typename T::flatbuffer_t>>> CreateVector(FlatBufferBuilder &_fbb, const TArray<T*> &arr) {
+    std::vector<Offset<typename T::flatbuffer_t>> v;
+    v.reserve(arr.Num());
+    for (const T *elem : arr) {
+        v.push_back(elem->ToFlatBuffer(_fbb));
+    }
+    return _fbb.CreateVector(v);
+}
+
 // structs -> Offset<Vector<const Struct *>>
 // U is a Uobject with ToFlatbufferStruct
-template<typename T, typename U>
-Offset<Vector<const Struct *>> CreateVector(flatbuffers::FlatBufferBuilder &_fbb, TArray<U *> foo) {
-    std::vector<U> v;
+template<typename T, typename = typename std::enable_if<std::is_class<T>::value>::type>
+Offset<Vector<const typename T::flatbuffer_t *>> CreateVector(FlatBufferBuilder &_fbb, const TArray<T*> &arr) {
+    std::vector<typename T::flatbuffer_t> v;
     v.reserve(arr.Num());
-    for (const U *elem : arr) {
-        v.push_back(*U::ToFlatBufferStruct(elem));
+    for (const T *elem : arr) {
+        v.push_back(*elem->ToFlatBufferStruct());
     }
     return _fbb.CreateVectorOfStructs(v);
 }
 
-// tables -> Offset<Vector<T = Offset<Table>>>
-// U is a UObject with ToFlatbuffer
+// enums -> Offset<Vector<T = enum>>
+// U needs to be cast to T enum
 template<typename T, typename U>
-Offset<Vector<Offset<T>>> CreateVector(flatbuffers::FlatBufferBuilder &_fbb, TArray<U *> foo) {
-    std::vector<Offset<U>> v;
+auto CreateVector(FlatBufferBuilder &_fbb, const TArray<U> &arr)
+        -> typename std::enable_if<std::is_enum<T>::value, Offset<Vector<T>>>::type {
+    std::vector<T> v;
     v.reserve(arr.Num());
-    for (const U *elem : arr) {
-        v.push_back(*U::ToFlatBuffer(elem));
+    for (const U &elem : arr) {
+        v.push_back(static_cast<T>(elem));
     }
     return _fbb.CreateVector(v);
 }
 
 // scalars -> Offset<Vector<T = int>>
-// T and U may not be exactly the same types
+// T and U must be exactly the same types
 template<typename T, typename U>
-Offset<Vector<T>> CreateVector(flatbuffers::FlatBufferBuilder &_fbb, TArray<U> foo) {
-    std::vector<T> v;
-    v.reserve(arr.Num());
-    for (const U elem : arr) {
-        v.push_back(elem);
-    }
-    return _fbb.CreateVector(v);
+auto CreateVector(FlatBufferBuilder &_fbb, const TArray<U> &arr)
+        -> typename std::enable_if<std::is_same<T, U>::value, Offset<Vector<T>>>::type {
+    return _fbb.CreateVector(arr.GetData(), arr.Num());
 }
 }
 }

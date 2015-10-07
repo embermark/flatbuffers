@@ -24,10 +24,12 @@ table Monster (blueprint) {
   hp:int = 100;
   name:string;
   inventory:[ubyte];
-  friends:[Monster];
+  vtable:[Monster];
+  vstruct:[Vec3];
+  vstring:[string];
+  venum:[Color];
   frenemy:Monster;
   color:Color = Blue;
-  super_damage:int = 0;
 }
 
 root_type Monster;
