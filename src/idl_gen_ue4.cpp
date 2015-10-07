@@ -82,7 +82,7 @@ static std::string GenTypePointer(const Parser &parser, const Type &type) {
       return "FString";
     case BASE_TYPE_VECTOR:
       return "TArray<" +
-             GenTypeWire(parser, type.VectorType(), "", false) + ">";
+             GenTypeWire(parser, type.VectorType(), "", true) + ">";
     case BASE_TYPE_STRUCT: {
       return UE4ClassName(*type.struct_def) + " *";
     }
@@ -134,12 +134,17 @@ static void GenEnum(const Parser &/*parser*/, EnumDef &enum_def,
 // different underlying type from its interface type (currently only the
 // case for enums. "from" specify the direction, true meaning from the
 // underlying type to the interface type.
-std::string GenUnderlyingCast(const Parser &parser, const FieldDef &field,
+std::string GenUnderlyingCast(const Parser &parser, const Type &type,
                               bool from, const std::string &val) {
-  return field.value.type.enum_def && IsScalar(field.value.type.base_type)
-      ? "static_cast<" + GenTypeBasic(parser, field.value.type, from) + ">(" +
+  return type.enum_def && IsScalar(type.base_type)
+      ? "static_cast<" + GenTypeBasic(parser, type, from) + ">(" +
         val + ")"
       : val;
+}
+
+std::string GenUnderlyingCast(const Parser &parser, const FieldDef &field,
+                              bool from, const std::string &val) {
+  return GenUnderlyingCast(parser, field.value.type, from, val);
 }
 
 std::string GenUnderlyingCastCpp(const Parser &parser, const FieldDef &field,
@@ -177,7 +182,7 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
             code += "    for (auto elem : *flatbuffer->" + field.name + "()) {\n";
             std::string elem;
             if (IsScalar(field.value.type.element)) {
-              elem = "elem";
+              elem = GenUnderlyingCast(parser, field.value.type.VectorType(), true, "elem");
             } else if (field.value.type.struct_def) {
               elem = UE4ClassName(*field.value.type.struct_def) + "::Create(elem)";
             } else {
@@ -267,7 +272,7 @@ static void GenTableSerializer(const Parser &parser, StructDef &struct_def, std:
               {
                 auto vector_type = field.value.type.VectorType();
                 if (IsScalar(vector_type.base_type)) {
-                  post_create += "flatbuffers::ue4::CreateVector<" + GenTypeBasicCpp(parser, vector_type, true) + ", " + GenTypeBasic(parser, vector_type, true) + ">(_fbb, " + field.name + ")";
+                  post_create += "flatbuffers::ue4::CreateVector<" + GenTypeBasicCpp(parser, vector_type, false) + ", " + GenTypeBasic(parser, vector_type, true) + ">(_fbb, " + field.name + ")";
                 } else {
                   post_create += "flatbuffers::ue4::CreateVector(_fbb, " + field.name + ")";
                 }
