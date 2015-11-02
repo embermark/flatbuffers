@@ -44,6 +44,16 @@ static std::string PropertyCategory(const Definition &def) {
     return qualified_namespace;
 }
 
+static std::string GenUProperty(const FieldDef &field, const std::string &category) {
+  std::string ret {"UPROPERTY("};
+  // should we check for enum as well?
+  if (field.value.type.base_type != BASE_TYPE_LONG) {
+    ret += "VisibleAnywhere, BlueprintReadWrite, Category=\"" + category + "\"";
+  }
+  ret += ")";
+  return ret;
+}
+
 static std::string CPPClassName(const Definition &def) {
     return CPPNamespace(def) + def.name;
 }
@@ -369,11 +379,11 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   code += "UCLASS(BlueprintType)\n";
   code += "class " + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n";
-  code += "  using flatbuffer_t = " + cpp_class + ";\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
   code += "\n public:\n";
+  code += "  using flatbuffer_t = " + cpp_class + ";\n";
   GenConstructors(parser, struct_def, &code);
   GenTableSerializer(parser, struct_def, &code);
   for (auto it = struct_def.fields.vec.begin();
@@ -383,7 +393,7 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
     if (!field.deprecated) {  // Deprecated fields won't be accessible.
       //auto is_scalar = IsScalar(field.value.type.base_type);
       GenComment(field.doc_comment, code_ptr, nullptr, "  ");
-      code += "  UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category=\"" + category + "\")\n";
+      code += "  " + GenUProperty(field, category) + "\n";
       code += "  " + GenTypeGet(parser, field.value.type, true);
       code += field.name + ";\n";
 
@@ -416,11 +426,11 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
   code += "UCLASS(BlueprintType)\n";
   code += "class " + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n\n";
-  code += "  using flatbuffer_t = " + cpp_class + ";\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
   code += "\n public:\n";
+  code += "  using flatbuffer_t = " + cpp_class + ";\n";
   GenConstructors(parser, struct_def, &code);
   GenStructSerializer(parser, struct_def, &code);
 
@@ -431,7 +441,7 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
        ++it) {
     auto &field = **it;
     GenComment(field.doc_comment, code_ptr, nullptr, "  ");
-    code += "  UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category=\"" + category + "\")\n";
+    code += "  " + GenUProperty(field, category) + "\n";
     code += "  " + GenTypeGet(parser, field.value.type, true);
     code += field.name + ";\n";
   }

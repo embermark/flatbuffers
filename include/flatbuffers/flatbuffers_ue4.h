@@ -1,5 +1,7 @@
 #include "flatbuffers.h"
 
+#pragma once
+
 namespace flatbuffers {
 namespace ue4 {
 
