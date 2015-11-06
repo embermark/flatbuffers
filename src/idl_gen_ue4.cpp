@@ -199,7 +199,8 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
           }
           case BASE_TYPE_VECTOR:
           {
-            code += "    for (auto elem : *flatbuffer->" + field.name + "()) {\n";
+            code += "    if (flatbuffer->" + field.name + "()) {\n";
+            code += "      for (auto elem : *flatbuffer->" + field.name + "()) {\n";
             std::string elem;
             if (IsScalar(field.value.type.element)) {
               elem = GenUnderlyingCast(parser, field.value.type.VectorType(), true, "elem");
@@ -209,7 +210,7 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
               // String
               elem = "elem->c_str()";
             }
-            code += "      o->" + field.name + ".Add(" + elem + ");\n    }\n";
+            code += "        o->" + field.name + ".Add(" + elem + ");\n      }\n    }\n";
             break;
         }
           case BASE_TYPE_STRUCT:
