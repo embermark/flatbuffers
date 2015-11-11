@@ -156,10 +156,13 @@ static void GenEnum(const Parser &/*parser*/, EnumDef &enum_def,
 // underlying type to the interface type.
 std::string GenUnderlyingCast(const Parser &parser, const Type &type,
                               bool from, const std::string &val) {
-  return type.enum_def && IsScalar(type.base_type)
-      ? "static_cast<" + GenTypeBasic(parser, type, from) + ">(" +
-        val + ")"
-      : val;
+  if (type.enum_def && IsScalar(type.base_type)) {
+    return "static_cast<" + GenTypeBasic(parser, type, from) + ">(" + val + ")";
+  } else if (type.base_type == BASE_TYPE_BOOL) {
+    return "(" + val + " != 0)";
+  } else {
+    return val;
+  }
 }
 
 std::string GenUnderlyingCast(const Parser &parser, const FieldDef &field,
