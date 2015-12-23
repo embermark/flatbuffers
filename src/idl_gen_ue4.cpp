@@ -41,7 +41,7 @@ static std::string PropertyCategory(const Definition &def) {
              it != ns->components.end(); ++it) {
       qualified_namespace += *it + "|";
     }
-    return qualified_namespace;
+    return qualified_namespace + def.name;
 }
 
 static std::string GenUProperty(const FieldDef &field, const std::string &category) {
