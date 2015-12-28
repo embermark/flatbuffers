@@ -50,14 +50,13 @@ std::string OffsetPrefix(const FieldDef &field) {
 
 // Begin by declaring namespace and imports.
 static void BeginFile(const std::string name_space_name,
-                      const bool needs_imports,
+                      const bool /*needs_imports*/,
                       std::string *code_ptr) {
   std::string &code = *code_ptr;
   code += "# automatically generated, do not modify\n\n";
   code += "# namespace: " + name_space_name + "\n\n";
-  if (needs_imports) {
-    code += "import flatbuffers\n\n";
-  }
+  // hacky: drom enum_imports
+  code += "import flatbuffers\n\n";
 }
 
 // Begin a class declaration.
@@ -71,7 +70,7 @@ static void BeginClass(const StructDef &struct_def, std::string *code_ptr) {
 // Begin enum code with a class declaration.
 static void BeginEnum(const std::string class_name, std::string *code_ptr) {
   std::string &code = *code_ptr;
-  code += "class " + class_name + "(object):\n";
+  code += "class " + class_name + "(flatbuffers.EnumBase):\n";
 }
 
 // A single enum member.
@@ -132,17 +131,33 @@ static void GetVectorLen(const StructDef &struct_def,
   code += Indent + Indent + "return 0\n\n";
 }
 
+static std::string GenUnderlyingCast(const FieldDef &field, const std::string &getter, const bool real_enum) {
+  if (field.value.type.enum_def) {
+    return real_enum ? field.value.type.enum_def->name + "(" + getter + ")" : "(" + getter + ").value";
+  }
+
+  return getter;
+}
+
 // Get the value of a struct's scalar.
 static void GetScalarFieldOfStruct(const StructDef &struct_def,
                                    const FieldDef &field,
                                    std::string *code_ptr) {
   std::string &code = *code_ptr;
+
   std::string getter = GenGetter(field.value.type);
+  getter += "self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(";
+  getter += NumToString(field.value.offset) + "))";
+
   GenReceiver(struct_def, code_ptr);
   code += MakeCamel(field.name);
-  code += "(self): return " + getter;
-  code += "self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(";
-  code += NumToString(field.value.offset) + "))\n";
+  code += "(self):\n";
+
+  if (field.value.type.enum_def) {
+    code += Indent + Indent + "from ." + field.value.type.enum_def->name + " import " + field.value.type.enum_def->name + "\n";
+  }
+
+  code += Indent + Indent + "return " + GenUnderlyingCast(field, getter, true) + "\n";
 }
 
 // Get the value of a table's scalar.
@@ -150,13 +165,18 @@ static void GetScalarFieldOfTable(const StructDef &struct_def,
                                   const FieldDef &field,
                                   std::string *code_ptr) {
   std::string &code = *code_ptr;
+
   std::string getter = GenGetter(field.value.type);
+  getter += "o + self._tab.Pos)";
+
   GenReceiver(struct_def, code_ptr);
   code += MakeCamel(field.name);
   code += "(self):";
   code += OffsetPrefix(field);
-  code += Indent + Indent + Indent + "return " + getter;
-  code += "o + self._tab.Pos)\n";
+  if (field.value.type.enum_def) {
+    code += Indent + Indent + Indent + "from ." + field.value.type.enum_def->name + " import " + field.value.type.enum_def->name + "\n";
+  }
+  code += Indent + Indent + Indent + "return " + GenUnderlyingCast(field, getter, true) + "\n";
   code += Indent + Indent + "return " + field.value.constant + "\n\n";
 }
 
@@ -268,15 +288,22 @@ static void GetMemberOfVectorOfNonStruct(const StructDef &struct_def,
   std::string &code = *code_ptr;
   auto vectortype = field.value.type.VectorType();
 
+  std::string getter = GenGetter(field.value.type);
+  getter += "a + flatbuffers.number_types.UOffsetTFlags.py_type(j * ";
+  getter += NumToString(InlineSize(vectortype)) + "))";
+
   GenReceiver(struct_def, code_ptr);
   code += MakeCamel(field.name);
   code += "(self, j):";
   code += OffsetPrefix(field);
   code += Indent + Indent + Indent + "a = self._tab.Vector(o)\n";
+
+  if (field.value.type.enum_def) {
+    code += Indent + Indent + Indent + "from ." + field.value.type.enum_def->name + " import " + field.value.type.enum_def->name + "\n";
+  }
+
   code += Indent + Indent + Indent;
-  code += "return " + GenGetter(field.value.type);
-  code += "a + flatbuffers.number_types.UOffsetTFlags.py_type(j * ";
-  code += NumToString(InlineSize(vectortype)) + "))\n";
+  code += "return " + GenUnderlyingCast(field, getter, true) + "\n";
   if (vectortype.base_type == BASE_TYPE_STRING) {
     code += Indent + Indent + "return \"\"\n";
   } else {
@@ -345,7 +372,7 @@ static void StructBuilderBody(const StructDef &struct_def,
                         code_ptr);
     } else {
       code += "    builder.Prepend" + GenMethod(field) + "(";
-      code += nameprefix + MakeCamel(field.name, false) + ")\n";
+      code += GenUnderlyingCast(field, nameprefix + MakeCamel(field.name, false), false) + ")\n";
     }
   }
 }
@@ -384,7 +411,7 @@ static void BuildFieldOfTable(const StructDef &struct_def,
     code += "(";
     code += MakeCamel(field.name, false) + ")";
   } else {
-    code += MakeCamel(field.name, false);
+    code += GenUnderlyingCast(field, MakeCamel(field.name, false), false);
   }
   code += ", " + field.value.constant;
   code += ")\n";

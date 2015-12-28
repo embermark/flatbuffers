@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from .builder import Builder
+from .enum_base import EnumBase
 from .table import Table
 from .compat import range_func as compat_range
