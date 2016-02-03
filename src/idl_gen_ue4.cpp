@@ -47,8 +47,14 @@ static std::string PropertyCategory(const Definition &def) {
 static std::string GenUProperty(const FieldDef &field, const std::string &category) {
   std::string ret {"UPROPERTY("};
   // should we check for enum as well?
+  std::string bpaccess = "BlueprintReadWrite";
+  auto readonly = field.attributes.Lookup("bpreadonly");
+  if( readonly != nullptr )
+  {
+      bpaccess = "BlueprintReadOnly";
+  }
   if (field.value.type.base_type != BASE_TYPE_LONG) {
-    ret += "VisibleAnywhere, BlueprintReadWrite, Category=\"" + category + "\"";
+    ret += "VisibleAnywhere," + bpaccess + ", Category=\"" + category + "\"";
   }
   ret += ")";
   return ret;
