@@ -53,8 +53,14 @@ static std::string GenUProperty(const FieldDef &field, const std::string &catego
   {
       bpaccess = "BlueprintReadOnly";
   }
+  std::string savegamestr;
+  auto savegame = field.attributes.Lookup("savegame");
+  if( savegame != nullptr )
+  {
+      savegamestr = "SaveGame, ";
+  }
   if (field.value.type.base_type != BASE_TYPE_LONG) {
-    ret += "VisibleAnywhere," + bpaccess + ", Category=\"" + category + "\"";
+    ret += "VisibleAnywhere, " + bpaccess + ", " + savegamestr + "Category=\"" + category + "\"";
   }
   ret += ")";
   return ret;
