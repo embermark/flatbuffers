@@ -172,12 +172,12 @@ static void GetScalarFieldOfTable(const StructDef &struct_def,
   GenReceiver(struct_def, code_ptr);
   code += MakeCamel(field.name);
   code += "(self):";
-  code += OffsetPrefix(field);
   if (field.value.type.enum_def) {
-    code += Indent + Indent + Indent + "from ." + field.value.type.enum_def->name + " import " + field.value.type.enum_def->name + "\n";
+    code += "\n" + Indent + Indent + "from ." + field.value.type.enum_def->name + " import " + field.value.type.enum_def->name;
   }
+  code += OffsetPrefix(field);
   code += Indent + Indent + Indent + "return " + GenUnderlyingCast(field, getter, true) + "\n";
-  code += Indent + Indent + "return " + field.value.constant + "\n\n";
+  code += Indent + Indent + "return " + GenUnderlyingCast(field, field.value.constant, true) + "\n\n";
 }
 
 // Get a struct by initializing an existing struct.
