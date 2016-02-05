@@ -389,11 +389,19 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   // Generate an accessor struct, with methods of the form:
   // type name() const { return GetField<type>(offset, defaultval); }
   GenComment(struct_def.doc_comment, code_ptr, nullptr);
+  auto exportapi = struct_def.attributes.Lookup("exportapi");
+  std::string exportdecl;
+  if( exportapi )
+  {
+      exportdecl = exportapi->constant;
+      std::transform( exportdecl.begin(), exportdecl.end(), exportdecl.begin(), ::toupper );
+      exportdecl += "_API ";
+  }
   auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
   auto category = PropertyCategory(struct_def);
   code += "UCLASS(BlueprintType)\n";
-  code += "class " + ue4_class + " : public UObject {\n";
+  code += "class " + exportdecl + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
@@ -436,11 +444,19 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
   // Variables are private because they contain little endian data on all
   // platforms.
   GenComment(struct_def.doc_comment, code_ptr, nullptr);
+  auto exportapi = struct_def.attributes.Lookup("exportapi");
+  std::string exportdecl;
+  if( exportapi )
+  {
+     exportdecl = exportapi->constant;
+     std::transform( exportdecl.begin(), exportdecl.end(), exportdecl.begin(), ::toupper );
+     exportdecl += "_API ";
+  }
   auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
   auto category = PropertyCategory(struct_def);
   code += "UCLASS(BlueprintType)\n";
-  code += "class " + ue4_class + " : public UObject {\n";
+  code += "class " + exportdecl + ue4_class + " : public UObject {\n";
   code += "  GENERATED_BODY()\n\n";
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
