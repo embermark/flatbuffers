@@ -74,6 +74,10 @@ static std::string UE4ClassName(const Definition &def) {
 	return "UFB" + def.name;
 }
 
+static std::string UE4StructName(const Definition &def) {
+    return "FFB" + def.name;
+}
+
 // Return a C++ type from the table in idl.h
 static std::string GenTypeBasic(const Parser &/*parser*/, const Type &type,
                                 bool real_enum) {
@@ -397,12 +401,25 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
       std::transform( exportdecl.begin(), exportdecl.end(), exportdecl.begin(), ::toupper );
       exportdecl += "_API ";
   }
-  auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
   auto category = PropertyCategory(struct_def);
-  code += "UCLASS(BlueprintType)\n";
-  code += "class " + exportdecl + ue4_class + " : public UObject {\n";
-  code += "  GENERATED_BODY()\n";
+    
+  auto ue4struct = struct_def.attributes.Lookup("ue4struct");
+  if( ue4struct )
+  {
+    auto ue4_struct = UE4StructName(struct_def);
+    code += "USTRUCT(BlueprintType)\n";
+    code += "struct " + exportdecl + ue4_struct + " {\n";
+    code += "  GENERATED_USTRUCT_BODY()\n\n";
+  }
+  else
+  {
+    auto ue4_class = UE4ClassName(struct_def);
+    code += "UCLASS(BlueprintType)\n";
+    code += "class " + exportdecl + ue4_class + " : public UObject {\n";
+    code += "  GENERATED_BODY()\n\n";
+  }
+
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
@@ -452,12 +469,24 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
      std::transform( exportdecl.begin(), exportdecl.end(), exportdecl.begin(), ::toupper );
      exportdecl += "_API ";
   }
-  auto ue4_class = UE4ClassName(struct_def);
   auto cpp_class = CPPClassName(struct_def);
   auto category = PropertyCategory(struct_def);
-  code += "UCLASS(BlueprintType)\n";
-  code += "class " + exportdecl + ue4_class + " : public UObject {\n";
-  code += "  GENERATED_BODY()\n\n";
+    
+  auto ue4struct = struct_def.attributes.Lookup("ue4struct");
+  if( ue4struct )
+  {
+    auto ue4_struct = UE4StructName(struct_def);
+    code += "USTRUCT(BlueprintType)\n";
+    code += "struct " + exportdecl + ue4_struct + " {\n";
+    code += "  GENERATED_USTRUCT_BODY()\n\n";
+  }
+  else
+  {
+    auto ue4_class = UE4ClassName(struct_def);
+    code += "UCLASS(BlueprintType)\n";
+    code += "class " + exportdecl + ue4_class + " : public UObject {\n";
+    code += "  GENERATED_BODY()\n\n";
+  }
   //code += " private:\n";
   //GenMembers(parser, struct_def, &code);
 
@@ -506,8 +535,18 @@ std::string GenerateUE4(const Parser &parser,
   for (auto it = parser.structs_.vec.begin();
        it != parser.structs_.vec.end(); ++it) {
     auto &struct_def = **it;
-    auto ue4_class = UE4ClassName(struct_def);
-    forward_decl_code += "class " + ue4_class + ";\n";
+      
+    auto ue4struct = struct_def.attributes.Lookup("ue4struct");
+    if( ue4struct )
+    {
+      auto ue4_struct = UE4StructName(struct_def);
+      forward_decl_code += "struct " + ue4_struct + ";\n";
+    }
+    else
+    {
+      auto ue4_class = UE4ClassName(struct_def);
+      forward_decl_code += "class " + ue4_class + ";\n";
+    }
   }
 
   // Generate code for all structs, then all tables.
