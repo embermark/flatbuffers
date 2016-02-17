@@ -44,7 +44,7 @@ static std::string PropertyCategory(const Definition &def) {
     return qualified_namespace + def.name;
 }
 
-static std::string GenUProperty(const FieldDef &field, const std::string &category) {
+static std::string GenUProperty(const FieldDef &field, const std::string &category ) {
   std::string ret {"UPROPERTY("};
   // should we check for enum as well?
   std::string bpaccess = "BlueprintReadWrite";
@@ -54,8 +54,7 @@ static std::string GenUProperty(const FieldDef &field, const std::string &catego
     bpaccess = "BlueprintReadOnly";
   }
   std::string savegamestr;
-  auto savegame = field.attributes.Lookup("savegame");
-  if( savegame != nullptr )
+  if( field.attributes.Lookup("savegame") )
   {
     savegamestr = "SaveGame, ";
   }
@@ -148,6 +147,12 @@ static std::string GenTypePointer(const Parser &parser, const Type &type) {
   default:
     return "void";
   }
+}
+
+// trims the " *" from a pointer type
+static std::string GetNonPointerType( std::string PointerType )
+{
+  return PointerType.erase( PointerType.length()-2, 2 );
 }
 
 // Return a C++ type for any type (scalar/pointer) specifically for
@@ -502,17 +507,18 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   code += "  using flatbuffer_t = " + cpp_class + ";\n";
   GenConstructors(parser, struct_def, &code);
   GenTableSerializer(parser, struct_def, &code);
+
   for (auto it = struct_def.fields.vec.begin();
        it != struct_def.fields.vec.end();
        ++it) {
     auto &field = **it;
     if (!field.deprecated) {  // Deprecated fields won't be accessible.
       //auto is_scalar = IsScalar(field.value.type.base_type);
+
       GenComment(field.doc_comment, code_ptr, nullptr, "  ");
       code += "  " + GenUProperty(field, category) + "\n";
       code += "  " + GenTypeGet(parser, field.value.type, true);
       code += field.name + ";\n";
-
       // Call a different accessor for pointers, that indirects.
 //      auto accessor = is_scalar
   //      ? "GetField<"
@@ -520,6 +526,60 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
       //code += GenUnderlyingCast(parser, field, true, call);
       //code += "; }\n";
     }
+  }
+
+  bool bShouldGenSerializerFunc = (struct_def.attributes.Lookup("ue4serializable") != nullptr);
+  if( bShouldGenSerializerFunc )
+  {
+    //     virtual void Serialize(FArchive& Ar) override;
+    code += "\n";
+    code += "  virtual void Serialize(FArchive& Ar) override\n";
+    code += "  {\n";
+    code += "      Super::Serialize( Ar );\n";
+    // call Serialize on objects and do nothing with Scalars because they'll have a SaveGame tag
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end();
+         ++it) {
+      auto &field = **it;
+      if (!field.deprecated) { 
+        if( !IsScalar(field.value.type.base_type) && field.value.type.base_type != BASE_TYPE_STRING ){
+          if( field.value.type.base_type == BASE_TYPE_VECTOR &&
+             !IsScalar( field.value.type.VectorType().base_type ) &&
+             field.value.type.base_type != BASE_TYPE_STRING ) {
+            code += "      int Num = " + field.name + ".Num();\n";
+            code += "      Ar << Num;\n";
+            code += "      if( Ar.IsSaving() )\n";
+            code += "      {\n";
+            code += "          for( auto TheObject : " + field.name + " )\n";
+            code += "          {\n";
+            code += "              TheObject->Serialize( Ar );\n";
+            code += "          }\n";
+            code += "      }\n";
+            code += "      else if( Ar.IsLoading() )\n";
+            code += "      {\n";
+            code += "          for( int32 i=0; i < Num; ++i )\n";
+            code += "          {\n";
+            code += "              " + GenTypeWire(parser, field.value.type.VectorType(), "", true) + " NewObj = NewObject< " + GetNonPointerType( GenTypeWire(parser, field.value.type.VectorType(), "", true) ) + " >();\n";
+            code += "              NewObj->Serialize( Ar );\n";
+            code += "              " + field.name + ".Add( NewObj );\n";
+            code += "          }\n";
+            code += "      }\n";
+          }
+          else if( field.value.type.base_type == BASE_TYPE_STRUCT ) {
+            code += "      Ar << " + field.name + ";\n";
+          }   
+          else
+          {
+            code += "      Ar << " + field.name + ";\n";
+          }  
+        }
+        else
+        {
+          code += "      Ar << " + field.name + ";\n";
+        } 
+      } 
+    }
+    code += "  }\n";
   }
   code += "};\n\n";
 }
