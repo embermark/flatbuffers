@@ -98,10 +98,10 @@ static std::string GenTypeBasic(const Parser &/*parser*/, const Type &type,
     {
       ret_type = "E" + type.enum_def->name;
     }
-    
+
     return ret_type;
   }
-  
+
   return ctypename[type.base_type];
 }
 
@@ -240,19 +240,19 @@ std::string GenUnderlyingCastCpp(const Parser &parser, const FieldDef &field,
 
 static void GenConstructors(const Parser &parser, StructDef &struct_def, std::string *code_ptr) {
   std::string &code = *code_ptr;
-  
+
   std::string cpp_class = CPPClassName(struct_def);
   std::string member_modifier;
-  
+
   auto ue4struct = struct_def.attributes.Lookup("ue4struct");
   if( ue4struct )
   {
     std::string ue4_struct = UE4StructName(struct_def);
-    
+
     // make the default ctor because ue4 needs it
     code += "  " + ue4_struct + "()\n  ";
     code += "{}\n\n";
-    
+
     // make the flatbuffer ctor
     code += "  " + ue4_struct + "(const " + cpp_class + " *flatbuffer) {\n";
     code += "    if (!flatbuffer) {\n      return;\n    }\n";
@@ -261,14 +261,14 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
   {
     std::string ue4_class = UE4ClassName(struct_def);
     member_modifier = "o->";
-    
+
     // static Create method should be used instead of constructor since UE4 requires constructor
     // have no parameters
     code += "  static " + ue4_class + " *Create(const " + cpp_class + " *flatbuffer) {\n";
     code += "    if (!flatbuffer) {\n      return nullptr;\n    }\n";
     code += "    auto o = NewObject<" + ue4_class + ">();\n";
   }
-  
+
   for (auto it = struct_def.fields.vec.begin();
      it != struct_def.fields.vec.end();
      ++it) {
@@ -278,7 +278,9 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
         case BASE_TYPE_STRING:
         {
           std::string string_field = "flatbuffer->" + field.name + "()";
-          code += "    " + member_modifier + field.name + " = " + string_field + " ? " + string_field + "->c_str() : FString();\n";
+          code += "    if (" + string_field + ") {\n";
+          code += "      " + member_modifier + field.name + " = UTF8_TO_TCHAR(" + string_field + "->c_str());\n";
+          code += "    }\n";
           break;
         }
         case BASE_TYPE_VECTOR:
@@ -483,7 +485,7 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
   }
   auto cpp_class = CPPClassName(struct_def);
   auto category = PropertyCategory(struct_def);
-    
+
   auto ue4struct = struct_def.attributes.Lookup("ue4struct");
   if( ue4struct )
   {
@@ -541,7 +543,7 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
          it != struct_def.fields.vec.end();
          ++it) {
       auto &field = **it;
-      if (!field.deprecated) { 
+      if (!field.deprecated) {
         if( !IsScalar(field.value.type.base_type) && field.value.type.base_type != BASE_TYPE_STRING ){
           if( field.value.type.base_type == BASE_TYPE_VECTOR &&
              !IsScalar( field.value.type.VectorType().base_type ) &&
@@ -567,17 +569,17 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
           }
           else if( field.value.type.base_type == BASE_TYPE_STRUCT ) {
             code += "      Ar << " + field.name + ";\n";
-          }   
+          }
           else
           {
             code += "      Ar << " + field.name + ";\n";
-          }  
+          }
         }
         else
         {
           code += "      Ar << " + field.name + ";\n";
-        } 
-      } 
+        }
+      }
     }
     code += "  }\n";
   }
@@ -606,7 +608,7 @@ static void GenStruct(const Parser &parser, StructDef &struct_def,
   }
   auto cpp_class = CPPClassName(struct_def);
   auto category = PropertyCategory(struct_def);
-    
+
   auto ue4struct = struct_def.attributes.Lookup("ue4struct");
   if( ue4struct )
   {
@@ -670,7 +672,7 @@ std::string GenerateUE4(const Parser &parser,
   for (auto it = parser.structs_.vec.begin();
        it != parser.structs_.vec.end(); ++it) {
     auto &struct_def = **it;
-      
+
     auto ue4struct = struct_def.attributes.Lookup("ue4struct");
     if( ue4struct )
     {
