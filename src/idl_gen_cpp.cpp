@@ -684,9 +684,10 @@ std::string GenerateCPP(const Parser &parser,
     include_guard += "H_";
     std::transform(include_guard.begin(), include_guard.end(),
                    include_guard.begin(), ::toupper);
-    code += "#ifndef " + include_guard + "\n";
-    code += "#define " + include_guard + "\n\n";
-
+    //code += "#ifndef " + include_guard + "\n";
+    //code += "#define " + include_guard + "\n\n";
+    code += "#pragma once\n\n";
+      
     code += "#include \"flatbuffers/flatbuffers.h\"\n\n";
 
     if (opts.include_dependence_headers) {
@@ -775,7 +776,7 @@ std::string GenerateCPP(const Parser &parser,
     CloseNestedNameSpaces(name_space, &code);
 
     // Close the include guard.
-    code += "\n#endif  // " + include_guard + "\n";
+    //code += "\n#endif  // " + include_guard + "\n";
 
     return code;
   }

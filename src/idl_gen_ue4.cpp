@@ -190,7 +190,35 @@ static void GenEnum(const Parser &/*parser*/, EnumDef &enum_def,
     code += (it + 1) != enum_def.vals.vec.end() ? ",\n" : "\n";
   }
   code += "};\n\n";
+    code += "inline uint8 GetTypeHash(const E" + enum_def.name + " A) { return (uint8)A; }\n\n";
+    
 }
+    
+    static bool GenUE4Native(const std::vector<std::string> &dc, std::string *code_ptr) {
+        if (dc.begin() == dc.end()) {
+            // Don't output empty comment blocks with 0 lines of comment content.
+            return false;
+        }
+        std::string ue4_code = "UE4_NATIVE";
+        std::string &code = *code_ptr;
+        for (auto it = dc.begin();
+             it != dc.end();
+             ++it) {
+           
+           if (it->find(ue4_code) != std::string::npos)
+           {
+               for (std::string::const_iterator i = it->begin()+10; i != it->end(); ++i)
+                   code += *i;
+               code += "\n";
+           }
+           else
+           {
+               code += "///" + *it + "\n";
+           }
+        }
+
+        return true;
+    }
 
 // Generates a value with optionally a cast applied if the field has a
 // different underlying type from its interface type (currently only the
@@ -308,13 +336,25 @@ static void GenConstructors(const Parser &parser, StructDef &struct_def, std::st
           break;
         }
         case BASE_TYPE_STRUCT:
-          code += "    " + member_modifier + field.name + " = " + UE4ClassName(*field.value.type.struct_def);
-          code += "::Create(";
+          {
+              std::string dtype;
+            auto ue4struct = (*field.value.type.struct_def).attributes.Lookup("ue4struct");
+              if (ue4struct)
+              {
+                  dtype = UE4StructName(*field.value.type.struct_def) + "(";
+              }
+              else
+              {
+                  dtype = UE4ClassName(*field.value.type.struct_def) + "::Create(";
+              }
+          code += "    " + member_modifier + field.name + " = " + dtype;
+          //code += "::Create(";
           if (struct_def.fixed) {
             code += "&";
           }
           code += "flatbuffer->" + field.name + "());\n";
           break;
+          }
         default:
           code += "    " + member_modifier + field.name + " = " + GenUnderlyingCast(parser, field, true, "flatbuffer->" + field.name + "()") + ";\n";
           break;
@@ -378,31 +418,57 @@ static void GenTableSerializer(const Parser &parser, StructDef &struct_def, std:
             post_create += GenUnderlyingCastCpp(parser, field, true, field.name);
         } else {
           // Create nested data
-          switch (field.value.type.base_type) {
-            case BASE_TYPE_STRING:
-              post_create += "_fbb.CreateString(TCHAR_TO_ANSI(*" + field.name + "))";
-              break;
-            case BASE_TYPE_STRUCT:
-              if (IsStruct(field.value.type))  {
-                post_create += "(" + field.name + " ? " + field.name + "->ToFlatBufferStruct().get() : nullptr)";
-              } else {
-                post_create += "(" + field.name + " ? " + field.name + "->ToFlatBuffer(_fbb) : 0)";
-              }
-
-              break;
-            case BASE_TYPE_VECTOR:
-            {
-              auto vector_type = field.value.type.VectorType();
-              if (IsScalar(vector_type.base_type)) {
-                post_create += "flatbuffers::ue4::CreateVector<" + GenTypeBasicCpp(parser, vector_type, false) + ", " + GenTypeBasic(parser, vector_type, true) + ">(_fbb, " + field.name + ")";
-              } else {
-                post_create += "flatbuffers::ue4::CreateVector(_fbb, " + field.name + ")";
-              }
-              break;
+            switch (field.value.type.base_type) {
+                case BASE_TYPE_STRING:
+                    post_create += "_fbb.CreateString(TCHAR_TO_ANSI(*" + field.name + "))";
+                    break;
+                case BASE_TYPE_STRUCT:
+                    if (IsStruct(field.value.type))  {
+                        //std::string createStr;
+                        auto ue4struct = (*field.value.type.struct_def).attributes.Lookup("ue4struct");
+                        if (ue4struct)
+                        {
+                            post_create += field.name + ".ToFlatBufferStruct().get()";
+                        }
+                        else{
+                            
+                            post_create += "(" + field.name + " ? " + field.name + "->ToFlatBufferStruct().get() : nullptr)";
+                        }
+                    } else {
+                        auto ue4struct = (*field.value.type.struct_def).attributes.Lookup("ue4struct");
+                        if (ue4struct)
+                        {
+                            post_create += field.name + ".ToFlatBufferStruct(_fbb)";
+                        }
+                        else {
+                            post_create += "(" + field.name + " ? " + field.name + "->ToFlatBuffer(_fbb) : 0)";
+                        }
+                    }
+                    
+                    break;
+                case BASE_TYPE_VECTOR:
+                {
+                    auto vector_type = field.value.type.VectorType();
+                    if (IsScalar(vector_type.base_type)) {
+                        post_create += "flatbuffers::ue4::CreateVector<" + GenTypeBasicCpp(parser, vector_type, false) + ", " + GenTypeBasic(parser, vector_type, true) + ">(_fbb, " + field.name + ")";
+                    } else if (IsStruct(vector_type) && (*field.value.type.struct_def).attributes.Lookup("ue4struct")) {
+                        //auto ue4struct = (vector_type.struct_def).attributes.Lookup("ue4struct");
+                        //if (ue4struct)
+                        //{
+                            post_create += "flatbuffers::ue4::CreateVectorOfStructs(_fbb, " + field.name + ")";
+                        //}
+                    } else if ( (field).attributes.Lookup("ue4struct") ) {
+                            post_create += "flatbuffers::ue4::CreateVectorOfStructs(_fbb, " + field.name + ")";
+                    } else
+                        {
+                            post_create += "flatbuffers::ue4::CreateVector(_fbb, " + field.name + ")";
+                        }
+                    
+                    break;
+                }
+                default:
+                    assert("can't serialize this guy!!!");
             }
-            default:
-              assert("can't serialize this guy!!!");
-          }
         }
     }
   }
@@ -516,8 +582,11 @@ static void GenTable(const Parser &parser, StructDef &struct_def,
     auto &field = **it;
     if (!field.deprecated) {  // Deprecated fields won't be accessible.
       //auto is_scalar = IsScalar(field.value.type.base_type);
-
-      GenComment(field.doc_comment, code_ptr, nullptr, "  ");
+        //need to check for UE4Native and create property if so
+        if (!GenUE4Native(field.doc_comment, code_ptr))
+        {
+            GenComment(field.doc_comment, code_ptr, nullptr, "  ");
+        }
       code += "  " + GenUProperty(field, category) + "\n";
       code += "  " + GenTypeGet(parser, field.value.type, true);
       code += field.name + ";\n";
@@ -707,7 +776,7 @@ std::string GenerateUE4(const Parser &parser,
     code += "#pragma once\n";
 
     // ue4 helpers
-    code += "#include \"flatbuffers_ue4.h\"\n";
+    code += "#include \"flatbuffers/flatbuffers_ue4.h\"\n";
     // include flatbuffers cpp implementation
     code += "#include \"" + file_name + "_generated.h\"\n";
 

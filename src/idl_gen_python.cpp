@@ -72,6 +72,20 @@ static void BeginEnum(const std::string class_name, std::string *code_ptr) {
   std::string &code = *code_ptr;
   code += "class " + class_name + "(flatbuffers.EnumBase):\n";
 }
+    
+    static void EnumOrder(const EnumDef &enum_def, std::string *code_ptr)
+    {
+        std::string &code = *code_ptr;
+        code += Indent + "__order__ = '";
+        for (auto it = enum_def.vals.vec.begin();
+             it != enum_def.vals.vec.end();
+             ++it) {
+            auto &ev = **it;
+            code += ev.name + " ";
+        }
+        code += "'\n";
+        
+    }
 
 // A single enum member.
 static void EnumMember(const EnumVal ev, std::string *code_ptr) {
@@ -554,6 +568,7 @@ static void GenEnum(const EnumDef &enum_def, std::string *code_ptr) {
 
   GenComment(enum_def.doc_comment, code_ptr, nullptr, "# ");
   BeginEnum(enum_def.name, code_ptr);
+    EnumOrder(enum_def, code_ptr);
   for (auto it = enum_def.vals.vec.begin();
        it != enum_def.vals.vec.end();
        ++it) {
